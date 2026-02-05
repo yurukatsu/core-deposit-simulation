@@ -1,0 +1,65 @@
+# Example configuration for core deposit simulation
+# ================================================
+# This file documents all available configuration options.
+
+data:
+  path: data/sample.csv
+  volume_column: volume     # Column name for deposit volume
+  inflow_column: inflow     # Column name for inflow
+  date_column: date         # Column name for date index (required for date-based bounds)
+
+  # Covariate configuration (optional)
+  # covariate:
+  #   path: data/covariate.csv
+  #   columns:
+  #     - GJGB10 Index
+  #     - GJGB2 Index
+  #   date_column: date     # Column for joining with main data (month-level)
+
+model:
+  # Estimator type: "nls" (Non-linear Least Squares), "map" (Maximum A Posteriori), or "mcmc"
+  estimator: nls
+
+  # NLS/MAP common options
+  fix_m: null               # Optional: fix m parameter to this value
+  loss: soft_l1             # Loss function: soft_l1, huber, cauchy
+  f_scale: 0.05             # Scaling factor for robust loss functions
+
+  # MCMC specific options (ignored for NLS/MAP)
+  num_warmup: 1000
+  num_samples: 2000
+  num_chains: 1
+  ar_errors: false          # Use AR(1) error model
+  likelihood: studentt      # Likelihood: normal, studentt
+  init_from_nls: true       # Initialize MCMC from NLS estimates
+
+  # MCMC convergence and retry settings
+  rhat_threshold: 1.1       # R-hat threshold for convergence
+  max_retries: 2            # Max retry attempts if R-hat > threshold
+  retry_multiplier: 1.5     # Multiplier for warmup/samples on retry
+
+simulation:
+  t_train: 60               # Training period length (months)
+  t_test: 12                # Test/forecast period length (months), 0 = in-sample only
+  t_gap: 1                  # Sliding step size (months)
+  # max_windows: 1          # Limit number of windows (null = no limit)
+
+  # Bounds specification (use either index-based OR date-based, not both)
+  # Option 1: Index-based bounds
+  # start_index: 0
+  # end_index: null
+
+  # Option 2: Date-based bounds (preferred)
+  start_date: 2000-01-01    # Start date (YYYY-MM-DD)
+  # end_date: 2020-12-01    # End date (exclusive, YYYY-MM-DD)
+
+  # Parallel processing
+  n_jobs: 1                 # Number of parallel workers (1=sequential)
+
+mlflow:
+  tracking_uri: http://192.168.1.12:15000
+  experiment_name: core-deposit-simulation
+  run_name: null            # Auto-generated if null
+  artifact_location: null   # S3 artifact storage (e.g., s3://bucket/path)
+  tags:
+    version: "0.1.0"

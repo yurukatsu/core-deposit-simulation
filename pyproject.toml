@@ -1,0 +1,47 @@
+[project]
+name = "core-deposit-simulation"
+version = "0.1.0"
+description = "Rolling window simulation for core deposit models"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "arviz>=0.23.1",
+    "boto3>=1.42.40",
+    "coredeposit",
+    "loguru>=0.7.3",
+    "matplotlib>=3.10.8",
+    "mlflow>=3.9.0",
+    "pydantic>=2.12.5",
+    "pyyaml>=6.0.3",
+    "typer>=0.21.1",
+]
+
+[dependency-groups]
+dev = [
+    "poethepoet>=0.40.0",
+    "ruff>=0.14.14",
+    "ty>=0.0.14",
+]
+
+[project.scripts]
+simulate = "simulation.cli:main"
+
+[tool.uv.sources]
+coredeposit = { git = "https://github.com/yurukatsu/core-deposit-analysis.git" }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/simulation"]
+
+[tool.hatch.build.targets.wheel.sources]
+"src" = ""
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.poe.tasks]
+format = "ruff format src/"
+lint = "ruff check src/"
+typecheck = "ty check src/"
+check = ["lint"]  # typecheck excluded due to JAX/NumPyro false positives
+all = ["format", "check"]

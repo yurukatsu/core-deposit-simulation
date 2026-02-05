@@ -1,0 +1,39 @@
+# BOJ data simulation with MCMC estimation
+# =========================================
+
+data:
+  path: data/boj.csv
+  volume_column: volume
+  inflow_column: inflow
+  date_column: date
+
+  covariate:
+    path: data/covariate.csv
+    columns:
+      - VJY0001M Index        # 1M LIBOR
+    date_column: date
+
+model:
+  estimator: mcmc
+  num_warmup: 3500
+  num_samples: 6500
+  num_chains: 2
+  ar_errors: false
+  likelihood: studentt
+  init_from_nls: true         # Initialize from NLS for faster convergence
+
+simulation:
+  t_train: 120                 # 10 years
+  t_test: 0                    # In-sample only
+  t_gap: 1                   # Slide by 6 months
+  max_windows: 1               # Run only one window
+  start_date: 2003-01-01       # Start date
+
+mlflow:
+  tracking_uri: http://192.168.1.12:15000
+  experiment_name: core-deposit-simulation-s3
+  artifact_location: s3://yurukatsu-mlflow/artifacts
+  tags:
+    dataset: boj
+    covariates: VJY0001M
+    estimator: mcmc
