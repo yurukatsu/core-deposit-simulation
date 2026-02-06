@@ -66,3 +66,4 @@ mlflow:
   tags:                     # Run-level tags
     version: "0.1.0"
   experiment_tags: {}       # Experiment-level tags
+  experiment_description: null  # Experiment description (markdown supported)

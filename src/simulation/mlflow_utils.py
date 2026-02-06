@@ -28,6 +28,8 @@ def setup_mlflow(config: MLFlowConfig) -> str:
     # Check if experiment exists
     experiment = mlflow.get_experiment_by_name(config.experiment_name)
 
+    client = mlflow.tracking.MlflowClient()
+
     if experiment is None:
         # Create new experiment with artifact location if specified
         logger.debug(f"Creating new experiment: {config.experiment_name}")
@@ -47,9 +49,14 @@ def setup_mlflow(config: MLFlowConfig) -> str:
         # Update experiment tags if provided
         if config.experiment_tags:
             for key, value in config.experiment_tags.items():
-                mlflow.tracking.MlflowClient().set_experiment_tag(
-                    experiment_id, key, value
-                )
+                client.set_experiment_tag(experiment_id, key, value)
+
+    # Set experiment description if provided
+    if config.experiment_description:
+        client.set_experiment_tag(
+            experiment_id, "mlflow.note.content", config.experiment_description
+        )
+        logger.debug("Set experiment description")
 
     mlflow.set_experiment(experiment_id=experiment_id)
     return experiment_id

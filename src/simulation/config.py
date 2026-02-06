@@ -149,6 +149,9 @@ class MLFlowConfig(BaseModel):
     experiment_tags: dict[str, str] = Field(
         default_factory=dict, description="Experiment tags"
     )
+    experiment_description: str | None = Field(
+        default=None, description="Experiment description (markdown supported)"
+    )
 
 
 class Config(BaseModel):
