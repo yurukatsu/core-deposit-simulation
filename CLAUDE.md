@@ -112,13 +112,13 @@ Key methods in `simulator.py`:
 
 ```bash
 # Validate config
-uv run simulation validate configs/example.yaml
+uv run simulate validate configs/example.yaml
 
 # Dry run (print config without executing)
-uv run simulation run configs/example.yaml --dry-run
+uv run simulate run configs/example.yaml --dry-run
 
 # Quick test with verbose output
-uv run simulation run configs/example.yaml --no-mlflow -v
+uv run simulate run configs/example.yaml --no-mlflow -v
 ```
 
 ## Code Style

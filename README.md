@@ -25,16 +25,16 @@ uv sync
 
 ```bash
 # Validate configuration
-uv run simulation validate configs/example.yaml
+uv run simulate validate configs/example.yaml
 
 # Run simulation (without MLFlow)
-uv run simulation run configs/example.yaml --no-mlflow
+uv run simulate run configs/example.yaml --no-mlflow
 
 # Run with MLFlow logging
-uv run simulation run configs/example.yaml
+uv run simulate run configs/example.yaml
 
 # Run with all artifacts
-uv run simulation run configs/example.yaml --save-plots --save-models
+uv run simulate run configs/example.yaml --save-plots --save-models
 ```
 
 ## Configuration
@@ -84,7 +84,7 @@ mlflow:
 ## CLI Options
 
 ```
-Usage: simulation run [OPTIONS] CONFIG_PATH
+Usage: simulate run [OPTIONS] CONFIG_PATH
 
 Options:
   --dry-run / --no-dry-run     Print config without running
