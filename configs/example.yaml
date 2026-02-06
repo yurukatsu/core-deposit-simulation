@@ -31,6 +31,7 @@ model:
   num_chains: 1
   ar_errors: false          # Use AR(1) error model
   likelihood: studentt      # Likelihood: normal, studentt
+  device: cpu               # Device: cpu or gpu
   init_from_nls: true       # Initialize MCMC from NLS estimates
 
   # MCMC convergence and retry settings
@@ -57,9 +58,11 @@ simulation:
   n_jobs: 1                 # Number of parallel workers (1=sequential)
 
 mlflow:
-  tracking_uri: http://192.168.1.12:15000
+  tracking_uri: http://localhost:5000
   experiment_name: core-deposit-simulation
   run_name: null            # Auto-generated if null
+  description: null         # Run description (supports markdown)
   artifact_location: null   # S3 artifact storage (e.g., s3://bucket/path)
-  tags:
+  tags:                     # Run-level tags
     version: "0.1.0"
+  experiment_tags: {}       # Experiment-level tags

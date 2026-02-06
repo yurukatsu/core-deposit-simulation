@@ -36,10 +36,16 @@ def setup_mlflow(config: MLFlowConfig) -> str:
         experiment_id = mlflow.create_experiment(
             config.experiment_name,
             artifact_location=config.artifact_location,
+            tags=config.experiment_tags if config.experiment_tags else None,
         )
     else:
         experiment_id = experiment.experiment_id
         logger.debug(f"Using existing experiment: {config.experiment_name} (ID: {experiment_id})")
+
+        # Update experiment tags if provided
+        if config.experiment_tags:
+            for key, value in config.experiment_tags.items():
+                mlflow.tracking.MlflowClient().set_experiment_tag(experiment_id, key, value)
 
     mlflow.set_experiment(experiment_id=experiment_id)
     return experiment_id
@@ -66,7 +72,11 @@ def mlflow_run(config: Config) -> Iterator[mlflow.ActiveRun]:
         **mlflow_config.tags,
     }
 
-    with mlflow.start_run(run_name=mlflow_config.run_name, tags=tags) as run:
+    with mlflow.start_run(
+        run_name=mlflow_config.run_name,
+        tags=tags,
+        description=mlflow_config.description,
+    ) as run:
         # Log configuration as params
         _log_config_params(config)
         yield run
@@ -90,6 +100,7 @@ def _log_config_params(config: Config) -> None:
         mlflow.log_param("model.num_chains", config.model.num_chains)
         mlflow.log_param("model.ar_errors", config.model.ar_errors)
         mlflow.log_param("model.likelihood", config.model.likelihood)
+        mlflow.log_param("model.device", config.model.device)
 
     # Simulation config
     mlflow.log_param("simulation.t_train", config.simulation.t_train)
@@ -101,6 +112,99 @@ def _log_config_params(config: Config) -> None:
         mlflow.log_param("simulation.start_index", config.simulation.start_index)
     if config.simulation.end_index is not None:
         mlflow.log_param("simulation.end_index", config.simulation.end_index)
+
+
+def log_config_artifact(config: Config, config_path: str | None = None) -> None:
+    """Log configuration as artifact.
+
+    Args:
+        config: Configuration object
+        config_path: Optional path to original config file
+    """
+    import tempfile
+    from pathlib import Path
+
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Save config as JSON
+        json_path = Path(tmpdir) / "config.json"
+        with open(json_path, "w") as f:
+            json.dump(config.model_dump(mode="json"), f, indent=2, default=str)
+        mlflow.log_artifact(str(json_path), artifact_path="config")
+
+        # Save config as YAML
+        yaml_path = Path(tmpdir) / "config.yaml"
+        with open(yaml_path, "w") as f:
+            yaml.dump(config.model_dump(mode="json"), f, default_flow_style=False, sort_keys=False)
+        mlflow.log_artifact(str(yaml_path), artifact_path="config")
+
+        # Copy original config file if provided
+        if config_path:
+            original_path = Path(config_path)
+            if original_path.exists():
+                mlflow.log_artifact(str(original_path), artifact_path="config")
+                logger.debug(f"Logged original config: {original_path.name}")
+
+
+def log_model_artifact(result: WindowResult, estimator_type: str) -> None:
+    """Log model estimation result as artifact.
+
+    Args:
+        result: WindowResult containing estimation result
+        estimator_type: Type of estimator ('nls', 'map', or 'mcmc')
+    """
+    import tempfile
+    from pathlib import Path
+
+    if result.result is None:
+        logger.warning("No estimation result to log")
+        return
+
+    estimation_result = result.result
+    window_id = result.window_id
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir_path = Path(tmpdir)
+        artifact_path = f"models/window_{window_id:03d}"
+
+        # Save parameter summary as JSON (for all estimator types)
+        params_summary = {}
+        for name, value in estimation_result.params.items():
+            if hasattr(value, "mean"):
+                # MCMC samples
+                params_summary[name] = {
+                    "mean": float(np.mean(value)),
+                    "std": float(np.std(value)),
+                    "median": float(np.median(value)),
+                    "q5": float(np.percentile(value, 5)),
+                    "q95": float(np.percentile(value, 95)),
+                }
+            else:
+                # Point estimate
+                params_summary[name] = {"value": float(value)}
+
+        params_path = tmpdir_path / "params.json"
+        with open(params_path, "w") as f:
+            json.dump(params_summary, f, indent=2)
+        mlflow.log_artifact(str(params_path), artifact_path=artifact_path)
+
+        # For MCMC, save InferenceData as NetCDF
+        if estimator_type == "mcmc" and "mcmc" in estimation_result.diagnostics:
+            try:
+                import arviz as az
+
+                mcmc = estimation_result.diagnostics["mcmc"]
+                idata = az.from_numpyro(mcmc)
+
+                netcdf_path = tmpdir_path / "inference_data.nc"
+                idata.to_netcdf(str(netcdf_path))
+                mlflow.log_artifact(str(netcdf_path), artifact_path=artifact_path)
+                logger.debug(f"Logged MCMC InferenceData for window {window_id}")
+            except Exception as e:
+                logger.warning(f"Failed to save InferenceData: {e}")
+
+        logger.debug(f"Logged model artifacts for window {window_id}")
 
 
 def log_window_result(result: WindowResult, prefix: str = "") -> None:

@@ -20,6 +20,7 @@ model:
   num_chains: 2
   ar_errors: false
   likelihood: studentt
+  device: cpu                 # cpu or gpu
   init_from_nls: true         # Initialize from NLS for faster convergence
 
 simulation:
@@ -32,8 +33,14 @@ simulation:
 mlflow:
   tracking_uri: http://192.168.1.12:15000
   experiment_name: core-deposit-simulation-s3
+  description: |
+    BOJ deposit simulation with MCMC estimation.
+    Using 1M LIBOR as covariate.
   artifact_location: s3://yurukatsu-mlflow/artifacts
   tags:
     dataset: boj
     covariates: VJY0001M
     estimator: mcmc
+  experiment_tags:
+    project: core-deposit
+    data_source: boj

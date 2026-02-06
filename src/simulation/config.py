@@ -44,6 +44,7 @@ class ModelConfig(BaseModel):
     likelihood: Literal["normal", "studentt"] = Field(
         default="studentt", description="Likelihood type for MCMC"
     )
+    device: Literal["cpu", "gpu"] = Field(default="cpu", description="Device for MCMC (cpu or gpu)")
 
     # NLS initialization for MCMC
     init_from_nls: bool = Field(default=True, description="Initialize MCMC from NLS estimates")
@@ -104,10 +105,12 @@ class MLFlowConfig(BaseModel):
         default="core-deposit-simulation", description="MLFlow experiment name"
     )
     run_name: str | None = Field(default=None, description="MLFlow run name")
+    description: str | None = Field(default=None, description="Run description")
     artifact_location: str | None = Field(
         default=None, description="Artifact storage location (e.g., s3://bucket/path)"
     )
-    tags: dict[str, str] = Field(default_factory=dict, description="Additional tags")
+    tags: dict[str, str] = Field(default_factory=dict, description="Run tags")
+    experiment_tags: dict[str, str] = Field(default_factory=dict, description="Experiment tags")
 
 
 class Config(BaseModel):

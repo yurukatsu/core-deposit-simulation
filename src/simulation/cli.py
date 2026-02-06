@@ -5,18 +5,43 @@ import sys
 from pathlib import Path
 from typing import Annotated
 
-# Set JAX CPU device count for parallel MCMC chains (must be before JAX import)
-# Default to number of CPU cores, capped at 4 to avoid memory issues
-_cpu_count = min(os.cpu_count() or 1, 4)
-os.environ.setdefault("XLA_FLAGS", f"--xla_force_host_platform_device_count={_cpu_count}")
-
 import numpy as np
 import typer
 from loguru import logger
 
 from simulation.config import load_config
+
+
+def _setup_jax_device(device: str, num_chains: int) -> None:
+    """Configure JAX device settings.
+
+    Must be called before any JAX operations.
+
+    Args:
+        device: 'cpu' or 'gpu'
+        num_chains: Number of MCMC chains (for CPU parallelism)
+    """
+    import jax
+
+    if device == "cpu":
+        # Set CPU device count for parallel chains
+        cpu_count = min(os.cpu_count() or 1, max(num_chains, 4))
+        os.environ["XLA_FLAGS"] = f"--xla_force_host_platform_device_count={cpu_count}"
+        jax.config.update("jax_platform_name", "cpu")
+        logger.debug(f"JAX configured for CPU with {cpu_count} devices")
+    else:  # gpu
+        jax.config.update("jax_platform_name", "gpu")
+        # Check if GPU is available
+        try:
+            devices = jax.devices("gpu")
+            logger.debug(f"JAX configured for GPU: {len(devices)} device(s) available")
+        except RuntimeError:
+            logger.warning("GPU requested but not available, falling back to CPU")
+            jax.config.update("jax_platform_name", "cpu")
 from simulation.mlflow_utils import (
+    log_config_artifact,
     log_mcmc_diagnostics,
+    log_model_artifact,
     log_plots_artifact,
     log_results_artifact,
     log_summary_metrics,
@@ -65,6 +90,7 @@ def run(
     dry_run: Annotated[bool, typer.Option(help="Print configuration without running")] = False,
     no_mlflow: Annotated[bool, typer.Option(help="Disable MLFlow logging")] = False,
     save_plots: Annotated[bool, typer.Option("--save-plots", help="Save prediction plots to MLFlow")] = False,
+    save_models: Annotated[bool, typer.Option("--save-models", help="Save model artifacts to MLFlow (params + MCMC samples)")] = False,
     plot_dir: Annotated[Path | None, typer.Option("--plot-dir", help="Save plots to local directory")] = None,
     jobs: Annotated[int | None, typer.Option("-j", "--jobs", help="Number of parallel workers (overrides config)")] = None,
     verbose: Annotated[bool, typer.Option("-v", "--verbose", help="Verbose output (DEBUG level)")] = False,
@@ -86,6 +112,10 @@ def run(
         typer.echo("Configuration:")
         typer.echo(config.model_dump_json(indent=2))
         return
+
+    # Configure JAX device for MCMC
+    if config.model.estimator == "mcmc":
+        _setup_jax_device(config.model.device, config.model.num_chains)
 
     # Create simulator
     logger.info("Creating simulator")
@@ -123,6 +153,9 @@ def run(
         with mlflow_run(config) as active_run:
             logger.info(f"MLFlow run ID: {active_run.info.run_id}")
 
+            # Log config as artifact
+            log_config_artifact(config, str(config_path))
+
             results = []
             with typer.progressbar(
                 simulator.iter_windows(), length=n_windows, label="Running"
@@ -136,6 +169,8 @@ def run(
 
                     # Log to MLFlow
                     log_window_result(result)
+                    if save_models:
+                        log_model_artifact(result, config.model.estimator)
                     oos_rmse = result.metrics['oosample_rmse']
                     if np.isnan(oos_rmse):
                         logger.debug(f"Window {window_id} completed: IS RMSE={result.metrics['insample_rmse']:.4f} (in-sample only)")
