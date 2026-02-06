@@ -29,7 +29,9 @@ def plot_window_predictions(
     Returns:
         matplotlib Figure
     """
-    has_oosample = result.oosample_actual is not None and len(result.oosample_actual) > 0
+    has_oosample = (
+        result.oosample_actual is not None and len(result.oosample_actual) > 0
+    )
 
     if has_oosample:
         fig, axes = plt.subplots(1, 2, figsize=figsize)
@@ -65,7 +67,9 @@ def plot_window_predictions(
         mape = result.metrics.get("insample_mape", np.nan)
         metrics_text = f"RMSE: {rmse:.2f}\nMAPE: {mape:.1f}%"
         ax1.text(
-            0.02, 0.98, metrics_text,
+            0.02,
+            0.98,
+            metrics_text,
             transform=ax1.transAxes,
             verticalalignment="top",
             fontsize=9,
@@ -81,8 +85,12 @@ def plot_window_predictions(
             x_oosample = np.arange(result.train_end, result.test_end)
             ax2.set_xlabel("Index")
 
-        ax2.plot(x_oosample, result.oosample_actual, "b-", label="Actual", linewidth=1.5)
-        ax2.plot(x_oosample, result.oosample_pred, "r--", label="Predicted", linewidth=1.5)
+        ax2.plot(
+            x_oosample, result.oosample_actual, "b-", label="Actual", linewidth=1.5
+        )
+        ax2.plot(
+            x_oosample, result.oosample_pred, "r--", label="Predicted", linewidth=1.5
+        )
         ax2.set_ylabel("Volume")
         ax2.set_title("Out-of-Sample")
         ax2.legend()
@@ -97,7 +105,9 @@ def plot_window_predictions(
         mape = result.metrics.get("oosample_mape", np.nan)
         metrics_text = f"RMSE: {rmse:.2f}\nMAPE: {mape:.1f}%"
         ax2.text(
-            0.02, 0.98, metrics_text,
+            0.02,
+            0.98,
+            metrics_text,
             transform=ax2.transAxes,
             verticalalignment="top",
             fontsize=9,
@@ -171,13 +181,22 @@ def plot_combined_timeseries(
         return fig
 
     # Check if we have out-of-sample data
-    has_oosample = any(r.oosample_actual is not None and len(r.oosample_actual) > 0 for r in results)
+    has_oosample = any(
+        r.oosample_actual is not None and len(r.oosample_actual) > 0 for r in results
+    )
 
     if not has_oosample:
         # In-sample only: plot combined in-sample predictions
         ax.set_title("In-Sample Predictions (No Out-of-Sample)")
-        ax.text(0.5, 0.5, "No out-of-sample data (t_test=0)",
-                ha='center', va='center', transform=ax.transAxes, fontsize=12)
+        ax.text(
+            0.5,
+            0.5,
+            "No out-of-sample data (t_test=0)",
+            ha="center",
+            va="center",
+            transform=ax.transAxes,
+            fontsize=12,
+        )
         return fig
 
     # Collect all actual values (deduplicated)
@@ -193,7 +212,9 @@ def plot_combined_timeseries(
         else:
             dates = np.arange(result.train_end, result.test_end)
 
-        for d, a, p in zip(dates, result.oosample_actual, result.oosample_pred, strict=False):
+        for d, a, p in zip(
+            dates, result.oosample_actual, result.oosample_pred, strict=False
+        ):
             key = str(d)
             # Store actual (only need once)
             if key not in all_actuals:
@@ -207,12 +228,18 @@ def plot_combined_timeseries(
     sorted_preds = sorted(all_preds.values(), key=lambda x: x[0])
 
     if sorted_actuals:
-        actual_dates, actual_values = zip(*[(d, v) for d, v in sorted_actuals], strict=False)
-        ax.plot(actual_dates, actual_values, "b-", label="Actual", linewidth=1.5, zorder=10)
+        actual_dates, actual_values = zip(
+            *[(d, v) for d, v in sorted_actuals], strict=False
+        )
+        ax.plot(
+            actual_dates, actual_values, "b-", label="Actual", linewidth=1.5, zorder=10
+        )
 
     if sorted_preds:
         pred_dates, pred_values, _ = zip(*sorted_preds, strict=False)
-        ax.plot(pred_dates, pred_values, "r-", label="Predicted", linewidth=1.2, alpha=0.8)
+        ax.plot(
+            pred_dates, pred_values, "r-", label="Predicted", linewidth=1.2, alpha=0.8
+        )
 
     ax.set_xlabel("Date" if results[0].oosample_dates is not None else "Index")
     ax.set_ylabel("Volume")
@@ -232,7 +259,9 @@ def plot_combined_timeseries(
 # ---------------------------------------------------------------------------
 
 
-def plot_mcmc_trace(idata: "az.InferenceData", figsize: tuple[float, float] = (12, 10)) -> Figure:
+def plot_mcmc_trace(
+    idata: "az.InferenceData", figsize: tuple[float, float] = (12, 10)
+) -> Figure:
     """Plot MCMC trace plots for convergence check.
 
     Args:
@@ -251,7 +280,9 @@ def plot_mcmc_trace(idata: "az.InferenceData", figsize: tuple[float, float] = (1
     return fig
 
 
-def plot_mcmc_posterior(idata: "az.InferenceData", figsize: tuple[float, float] = (12, 6)) -> Figure:
+def plot_mcmc_posterior(
+    idata: "az.InferenceData", figsize: tuple[float, float] = (12, 6)
+) -> Figure:
     """Plot posterior distributions.
 
     Args:
@@ -270,7 +301,9 @@ def plot_mcmc_posterior(idata: "az.InferenceData", figsize: tuple[float, float] 
     return fig
 
 
-def plot_mcmc_pair(idata: "az.InferenceData", figsize: tuple[float, float] = (10, 10)) -> Figure:
+def plot_mcmc_pair(
+    idata: "az.InferenceData", figsize: tuple[float, float] = (10, 10)
+) -> Figure:
     """Plot pair plot showing parameter correlations.
 
     Args:
@@ -289,7 +322,9 @@ def plot_mcmc_pair(idata: "az.InferenceData", figsize: tuple[float, float] = (10
     return plt.gcf()
 
 
-def plot_mcmc_forest(idata: "az.InferenceData", figsize: tuple[float, float] = (8, 4)) -> Figure:
+def plot_mcmc_forest(
+    idata: "az.InferenceData", figsize: tuple[float, float] = (8, 4)
+) -> Figure:
     """Plot forest plot comparing parameters.
 
     Args:
@@ -376,7 +411,9 @@ def plot_window_predictions_with_ci(
     Returns:
         matplotlib Figure
     """
-    has_oosample = result.oosample_actual is not None and len(result.oosample_actual) > 0
+    has_oosample = (
+        result.oosample_actual is not None and len(result.oosample_actual) > 0
+    )
 
     if has_oosample:
         fig, axes = plt.subplots(1, 2, figsize=figsize)
@@ -399,8 +436,7 @@ def plot_window_predictions_with_ci(
     if result.insample_ci is not None:
         ci = result.insample_ci
         ax1.fill_between(
-            x_insample, ci["lower"], ci["upper"],
-            alpha=0.3, color="red", label="95% CI"
+            x_insample, ci["lower"], ci["upper"], alpha=0.3, color="red", label="95% CI"
         )
 
     ax1.plot(x_insample, result.insample_actual, "b-", label="Actual", linewidth=1.5)
@@ -419,7 +455,9 @@ def plot_window_predictions_with_ci(
         mape = result.metrics.get("insample_mape", np.nan)
         metrics_text = f"RMSE: {rmse:.2f}\nMAPE: {mape:.1f}%"
         ax1.text(
-            0.02, 0.98, metrics_text,
+            0.02,
+            0.98,
+            metrics_text,
             transform=ax1.transAxes,
             verticalalignment="top",
             fontsize=9,
@@ -439,12 +477,20 @@ def plot_window_predictions_with_ci(
         if result.oosample_ci is not None:
             ci = result.oosample_ci
             ax2.fill_between(
-                x_oosample, ci["lower"], ci["upper"],
-                alpha=0.3, color="red", label="95% CI"
+                x_oosample,
+                ci["lower"],
+                ci["upper"],
+                alpha=0.3,
+                color="red",
+                label="95% CI",
             )
 
-        ax2.plot(x_oosample, result.oosample_actual, "b-", label="Actual", linewidth=1.5)
-        ax2.plot(x_oosample, result.oosample_pred, "r--", label="Predicted", linewidth=1.5)
+        ax2.plot(
+            x_oosample, result.oosample_actual, "b-", label="Actual", linewidth=1.5
+        )
+        ax2.plot(
+            x_oosample, result.oosample_pred, "r--", label="Predicted", linewidth=1.5
+        )
         ax2.set_ylabel("Volume")
         ax2.set_title("Out-of-Sample")
         ax2.legend()
@@ -458,7 +504,9 @@ def plot_window_predictions_with_ci(
         mape = result.metrics.get("oosample_mape", np.nan)
         metrics_text = f"RMSE: {rmse:.2f}\nMAPE: {mape:.1f}%"
         ax2.text(
-            0.02, 0.98, metrics_text,
+            0.02,
+            0.98,
+            metrics_text,
             transform=ax2.transAxes,
             verticalalignment="top",
             fontsize=9,
@@ -499,13 +547,22 @@ def plot_combined_timeseries_with_ci(
         return fig
 
     # Check if we have out-of-sample data
-    has_oosample = any(r.oosample_actual is not None and len(r.oosample_actual) > 0 for r in results)
+    has_oosample = any(
+        r.oosample_actual is not None and len(r.oosample_actual) > 0 for r in results
+    )
 
     if not has_oosample:
         # In-sample only: plot combined in-sample predictions
         ax.set_title("In-Sample Predictions (No Out-of-Sample)")
-        ax.text(0.5, 0.5, "No out-of-sample data (t_test=0)",
-                ha='center', va='center', transform=ax.transAxes, fontsize=12)
+        ax.text(
+            0.5,
+            0.5,
+            "No out-of-sample data (t_test=0)",
+            ha="center",
+            va="center",
+            transform=ax.transAxes,
+            fontsize=12,
+        )
         return fig
 
     # Collect all data (deduplicated, prefer later windows)
@@ -554,12 +611,18 @@ def plot_combined_timeseries_with_ci(
         ax.fill_between(ci_dates, ci_lo, ci_hi, alpha=0.3, color="red", label="95% CI")
 
     if sorted_actuals:
-        actual_dates, actual_values = zip(*[(d, v) for d, v in sorted_actuals], strict=False)
-        ax.plot(actual_dates, actual_values, "b-", label="Actual", linewidth=1.5, zorder=10)
+        actual_dates, actual_values = zip(
+            *[(d, v) for d, v in sorted_actuals], strict=False
+        )
+        ax.plot(
+            actual_dates, actual_values, "b-", label="Actual", linewidth=1.5, zorder=10
+        )
 
     if sorted_preds:
         pred_dates, pred_values, _ = zip(*sorted_preds, strict=False)
-        ax.plot(pred_dates, pred_values, "r-", label="Predicted", linewidth=1.2, alpha=0.8)
+        ax.plot(
+            pred_dates, pred_values, "r-", label="Predicted", linewidth=1.2, alpha=0.8
+        )
 
     ax.set_xlabel("Date" if results[0].oosample_dates is not None else "Index")
     ax.set_ylabel("Volume")

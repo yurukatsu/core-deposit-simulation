@@ -67,11 +67,17 @@ def _compute_metrics(actual: NDArray, pred: NDArray) -> dict[str, float]:
     mse = float(np.mean(residuals**2))
     rmse = float(np.sqrt(mse))
     mae = float(np.mean(np.abs(residuals)))
-    mape = float(np.mean(np.abs(residuals / actual)) * 100) if np.all(actual != 0) else np.nan
+    mape = (
+        float(np.mean(np.abs(residuals / actual)) * 100)
+        if np.all(actual != 0)
+        else np.nan
+    )
     return {"mse": mse, "rmse": rmse, "mae": mae, "mape": mape}
 
 
-def _check_mcmc_convergence(result: EstimationResult, threshold: float = 1.1) -> tuple[bool, float]:
+def _check_mcmc_convergence(
+    result: EstimationResult, threshold: float = 1.1
+) -> tuple[bool, float]:
     """Check MCMC convergence using R-hat statistic.
 
     Args:
@@ -145,12 +151,16 @@ class RollingWindowSimulator:
         # Load covariates if configured
         if data_config.covariate is not None:
             cov_config = data_config.covariate
-            logger.debug(f"Loading covariates from {cov_config.path}, columns={cov_config.columns}")
+            logger.debug(
+                f"Loading covariates from {cov_config.path}, columns={cov_config.columns}"
+            )
             cov_data = pd.read_csv(cov_config.path)
 
             # Join on date column
             if data_config.date_column is None:
-                raise ValueError("date_column must be specified in data config when using covariates")
+                raise ValueError(
+                    "date_column must be specified in data config when using covariates"
+                )
 
             # Convert dates and create year-month period for matching
             main_dates = pd.to_datetime(self._data[data_config.date_column])
@@ -171,6 +181,7 @@ class RollingWindowSimulator:
                 missing_mask = aligned_cov.isna().any(axis=1).values
                 n_missing = missing_mask.sum()
                 import warnings
+
                 warnings.warn(
                     f"Missing covariate data for {n_missing} periods. "
                     f"Use start_index to skip periods without covariate data.",
@@ -325,7 +336,9 @@ class RollingWindowSimulator:
         insample_mean = pred_95["mean"]
 
         # Out-of-sample CI (predict full, then slice)
-        full_pred_95 = estimator.predict(full_data, result, uncertainty=True, ci_prob=0.95)
+        full_pred_95 = estimator.predict(
+            full_data, result, uncertainty=True, ci_prob=0.95
+        )
         oosample_ci = {
             "lower": full_pred_95["lower"][split_idx:],
             "upper": full_pred_95["upper"][split_idx:],
@@ -363,15 +376,21 @@ class RollingWindowSimulator:
                 init_params=init_params,
             )
 
-            logger.trace(f"MCMC attempt {attempt + 1}: warmup={num_warmup}, samples={num_samples}")
+            logger.trace(
+                f"MCMC attempt {attempt + 1}: warmup={num_warmup}, samples={num_samples}"
+            )
             result = estimator.fit(train_data)
 
             # Check convergence
-            converged, max_rhat = _check_mcmc_convergence(result, model_config.rhat_threshold)
+            converged, max_rhat = _check_mcmc_convergence(
+                result, model_config.rhat_threshold
+            )
 
             if converged:
                 if attempt > 0:
-                    logger.info(f"MCMC converged after {attempt + 1} attempts (R-hat={max_rhat:.3f})")
+                    logger.info(
+                        f"MCMC converged after {attempt + 1} attempts (R-hat={max_rhat:.3f})"
+                    )
                 return result, estimator
 
             logger.warning(
@@ -460,7 +479,9 @@ class RollingWindowSimulator:
             window_id += 1
             train_start += sim.t_gap
 
-    def run_window(self, train_start: int, train_end: int, test_end: int) -> WindowResult:
+    def run_window(
+        self, train_start: int, train_end: int, test_end: int
+    ) -> WindowResult:
         """Run simulation for a single window.
 
         Args:
@@ -472,7 +493,9 @@ class RollingWindowSimulator:
             WindowResult with estimation and predictions
         """
         model_config = self.config.model
-        logger.trace(f"Running window: train=[{train_start}:{train_end}], test=[{train_end}:{test_end}]")
+        logger.trace(
+            f"Running window: train=[{train_start}:{train_end}], test=[{train_end}:{test_end}]"
+        )
 
         # Prepare training data
         train_data = self._prepare_data(train_start, train_end)
@@ -483,7 +506,9 @@ class RollingWindowSimulator:
             nls = NLSEstimator()
             nls_result = nls.fit(train_data, m_fixed=model_config.fix_m)
             init_params = {
-                k: v for k, v in nls_result.params.items() if k in ["lambda", "gamma", "w1", "h", "m"]
+                k: v
+                for k, v in nls_result.params.items()
+                if k in ["lambda", "gamma", "w1", "h", "m"]
             }
 
         # Fit model
@@ -497,8 +522,14 @@ class RollingWindowSimulator:
         # Log estimated parameters (use mean for MCMC arrays)
         lam_val = result.params.get("lambda")
         m_val = result.params.get("m")
-        lam_str = f"{float(lam_val.mean()):.4f}" if hasattr(lam_val, "mean") else f"{lam_val:.4f}"
-        m_str = f"{float(m_val.mean()):.4f}" if hasattr(m_val, "mean") else f"{m_val:.4f}"
+        lam_str = (
+            f"{float(lam_val.mean()):.4f}"
+            if hasattr(lam_val, "mean")
+            else f"{lam_val:.4f}"
+        )
+        m_str = (
+            f"{float(m_val.mean()):.4f}" if hasattr(m_val, "mean") else f"{m_val:.4f}"
+        )
         logger.trace(f"Estimation complete: lambda={lam_str}, m={m_str}")
 
         # Prepare data for predictions
@@ -517,8 +548,14 @@ class RollingWindowSimulator:
 
             if model_config.estimator == "mcmc":
                 # For MCMC, use mean from predictive distribution (consistent with CI)
-                insample_ci, oosample_ci, insample_pred, oosample_pred = self._compute_mcmc_ci(
-                    estimator, result, train_data, full_data, train_end - train_start
+                insample_ci, oosample_ci, insample_pred, oosample_pred = (
+                    self._compute_mcmc_ci(
+                        estimator,
+                        result,
+                        train_data,
+                        full_data,
+                        train_end - train_start,
+                    )
                 )
             else:
                 # For NLS/MAP, use point estimate
@@ -528,7 +565,9 @@ class RollingWindowSimulator:
         else:
             # In-sample only (t_test = 0)
             if model_config.estimator == "mcmc":
-                pred_95 = estimator.predict(train_data, result, uncertainty=True, ci_prob=0.95)
+                pred_95 = estimator.predict(
+                    train_data, result, uncertainty=True, ci_prob=0.95
+                )
                 insample_ci = {
                     "lower": pred_95["lower"],
                     "upper": pred_95["upper"],
@@ -559,14 +598,20 @@ class RollingWindowSimulator:
             test_end=test_end,
             train_start_date=self._get_date(train_start),
             train_end_date=self._get_date(train_end),
-            test_end_date=self._get_date(test_end) if test_end < self.data_length else None,
+            test_end_date=self._get_date(test_end)
+            if test_end < self.data_length
+            else None,
             result=result,
             insample_pred=insample_pred,
             insample_actual=np.asarray(insample_actual),
             oosample_pred=oosample_pred,
-            oosample_actual=np.asarray(oosample_actual) if oosample_actual is not None else None,
+            oosample_actual=np.asarray(oosample_actual)
+            if oosample_actual is not None
+            else None,
             insample_dates=self._get_dates_range(train_start, train_end),
-            oosample_dates=self._get_dates_range(train_end, test_end) if has_oosample else None,
+            oosample_dates=self._get_dates_range(train_end, test_end)
+            if has_oosample
+            else None,
             insample_ci=insample_ci,
             oosample_ci=oosample_ci,
             metrics=metrics,
@@ -596,9 +641,11 @@ class RollingWindowSimulator:
             result = self.run_window(train_start, train_end, test_end)
             result.window_id = window_id
             results.append(result)
-            oos_rmse = result.metrics['oosample_rmse']
+            oos_rmse = result.metrics["oosample_rmse"]
             if np.isnan(oos_rmse):
-                logger.debug(f"Window {window_id} completed: IS RMSE={result.metrics['insample_rmse']:.4f} (in-sample only)")
+                logger.debug(
+                    f"Window {window_id} completed: IS RMSE={result.metrics['insample_rmse']:.4f} (in-sample only)"
+                )
             else:
                 logger.debug(f"Window {window_id} completed: OOS RMSE={oos_rmse:.4f}")
 
@@ -615,6 +662,7 @@ class RollingWindowSimulator:
             List of WindowResult for each window
         """
         from concurrent.futures import ProcessPoolExecutor, as_completed
+        import multiprocessing as mp
 
         windows = list(self.iter_windows())
         n_windows = len(windows)
@@ -631,7 +679,10 @@ class RollingWindowSimulator:
 
         results = [None] * n_windows
 
-        with ProcessPoolExecutor(max_workers=n_jobs) as executor:
+        # Use spawn context to avoid JAX/NumPyro issues with fork
+        # JAX initializes device context on import, which doesn't work well with fork
+        ctx = mp.get_context("spawn")
+        with ProcessPoolExecutor(max_workers=n_jobs, mp_context=ctx) as executor:
             # Submit all tasks
             future_to_window = {}
             for window_id, train_start, train_end, test_end in windows:
@@ -655,11 +706,15 @@ class RollingWindowSimulator:
                 try:
                     result = future.result()
                     results[window_id] = result
-                    oos_rmse = result.metrics['oosample_rmse']
+                    oos_rmse = result.metrics["oosample_rmse"]
                     if np.isnan(oos_rmse):
-                        logger.debug(f"Window {window_id} completed: IS RMSE={result.metrics['insample_rmse']:.4f} (in-sample only)")
+                        logger.debug(
+                            f"Window {window_id} completed: IS RMSE={result.metrics['insample_rmse']:.4f} (in-sample only)"
+                        )
                     else:
-                        logger.debug(f"Window {window_id} completed: OOS RMSE={oos_rmse:.4f}")
+                        logger.debug(
+                            f"Window {window_id} completed: OOS RMSE={oos_rmse:.4f}"
+                        )
                 except Exception as e:
                     logger.error(f"Window {window_id} failed: {e}")
                     raise
@@ -683,10 +738,29 @@ def _run_window_worker(
 
     This function is called in a subprocess and must be picklable.
     """
+    import os
     from simulation.config import Config
 
     # Reconstruct config and simulator
     config = Config.model_validate(config_dict)
+
+    # Configure JAX for MCMC in subprocess
+    if config.model.estimator == "mcmc":
+        import jax
+
+        device = config.model.device
+        num_chains = config.model.num_chains
+
+        if device == "cpu":
+            # Set CPU device count for parallel chains
+            cpu_count = min(os.cpu_count() or 1, max(num_chains, 4))
+            os.environ["XLA_FLAGS"] = (
+                f"--xla_force_host_platform_device_count={cpu_count}"
+            )
+            jax.config.update("jax_platform_name", "cpu")
+        else:  # gpu
+            jax.config.update("jax_platform_name", "gpu")
+
     simulator = RollingWindowSimulator(config)
 
     # Set data directly (already loaded in main process)

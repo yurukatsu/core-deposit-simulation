@@ -12,29 +12,45 @@ class CovariateConfig(BaseModel):
     """Covariate data configuration."""
 
     path: Path = Field(..., description="Path to the covariate data file (CSV)")
-    columns: list[str] = Field(..., min_length=1, description="Column names to use as covariates")
-    date_column: str = Field(default="date", description="Column name for date index (for joining)")
+    columns: list[str] = Field(
+        ..., min_length=1, description="Column names to use as covariates"
+    )
+    date_column: str = Field(
+        default="date", description="Column name for date index (for joining)"
+    )
 
 
 class DataConfig(BaseModel):
     """Data source configuration."""
 
     path: Path = Field(..., description="Path to the data file (CSV)")
-    volume_column: str = Field(default="volume", description="Column name for deposit volume")
+    volume_column: str = Field(
+        default="volume", description="Column name for deposit volume"
+    )
     inflow_column: str = Field(default="inflow", description="Column name for inflow")
-    date_column: str | None = Field(default=None, description="Column name for date index")
-    covariate: CovariateConfig | None = Field(default=None, description="Covariate data configuration")
+    date_column: str | None = Field(
+        default=None, description="Column name for date index"
+    )
+    covariate: CovariateConfig | None = Field(
+        default=None, description="Covariate data configuration"
+    )
 
 
 class ModelConfig(BaseModel):
     """Model estimation configuration."""
 
-    estimator: Literal["nls", "map", "mcmc"] = Field(default="nls", description="Estimator type")
+    estimator: Literal["nls", "map", "mcmc"] = Field(
+        default="nls", description="Estimator type"
+    )
 
     # NLS/MAP common
     fix_m: float | None = Field(default=None, description="Fixed value for m parameter")
-    loss: str = Field(default="soft_l1", description="Loss function for NLS (soft_l1, huber, cauchy)")
-    f_scale: float = Field(default=0.05, description="Scaling factor for robust loss functions")
+    loss: str = Field(
+        default="soft_l1", description="Loss function for NLS (soft_l1, huber, cauchy)"
+    )
+    f_scale: float = Field(
+        default=0.05, description="Scaling factor for robust loss functions"
+    )
 
     # MCMC specific
     num_warmup: int = Field(default=1000, description="MCMC warmup iterations")
@@ -44,24 +60,38 @@ class ModelConfig(BaseModel):
     likelihood: Literal["normal", "studentt"] = Field(
         default="studentt", description="Likelihood type for MCMC"
     )
-    device: Literal["cpu", "gpu"] = Field(default="cpu", description="Device for MCMC (cpu or gpu)")
+    device: Literal["cpu", "gpu"] = Field(
+        default="cpu", description="Device for MCMC (cpu or gpu)"
+    )
 
     # NLS initialization for MCMC
-    init_from_nls: bool = Field(default=True, description="Initialize MCMC from NLS estimates")
+    init_from_nls: bool = Field(
+        default=True, description="Initialize MCMC from NLS estimates"
+    )
 
     # MCMC convergence and retry settings
-    rhat_threshold: float = Field(default=1.1, description="R-hat threshold for convergence check")
-    max_retries: int = Field(default=2, description="Maximum retry attempts for MCMC convergence")
-    retry_multiplier: float = Field(default=1.5, description="Multiplier for warmup/samples on retry")
+    rhat_threshold: float = Field(
+        default=1.1, description="R-hat threshold for convergence check"
+    )
+    max_retries: int = Field(
+        default=2, description="Maximum retry attempts for MCMC convergence"
+    )
+    retry_multiplier: float = Field(
+        default=1.5, description="Multiplier for warmup/samples on retry"
+    )
 
 
 class SimulationConfig(BaseModel):
     """Rolling window simulation configuration."""
 
     t_train: int = Field(..., gt=0, description="Training period length")
-    t_test: int = Field(..., ge=0, description="Test period length (0 = in-sample only)")
+    t_test: int = Field(
+        ..., ge=0, description="Test period length (0 = in-sample only)"
+    )
     t_gap: int = Field(default=1, gt=0, description="Sliding step size")
-    max_windows: int | None = Field(default=None, gt=0, description="Maximum number of windows (None = no limit)")
+    max_windows: int | None = Field(
+        default=None, gt=0, description="Maximum number of windows (None = no limit)"
+    )
 
     # Index-based bounds (legacy)
     start_index: int | None = Field(default=None, description="Start index (0-based)")
@@ -69,10 +99,14 @@ class SimulationConfig(BaseModel):
 
     # Date-based bounds (preferred)
     start_date: date | None = Field(default=None, description="Start date (YYYY-MM-DD)")
-    end_date: date | None = Field(default=None, description="End date (YYYY-MM-DD, exclusive)")
+    end_date: date | None = Field(
+        default=None, description="End date (YYYY-MM-DD, exclusive)"
+    )
 
     # Parallel processing
-    n_jobs: int = Field(default=1, description="Number of parallel workers (1=sequential)")
+    n_jobs: int = Field(
+        default=1, description="Number of parallel workers (1=sequential)"
+    )
 
     @model_validator(mode="after")
     def validate_bounds(self) -> "SimulationConfig":
@@ -80,7 +114,9 @@ class SimulationConfig(BaseModel):
         has_index = self.start_index is not None or self.end_index is not None
         has_date = self.start_date is not None or self.end_date is not None
         if has_index and has_date:
-            raise ValueError("Cannot mix index-based and date-based bounds. Use either start_index/end_index or start_date/end_date.")
+            raise ValueError(
+                "Cannot mix index-based and date-based bounds. Use either start_index/end_index or start_date/end_date."
+            )
 
         # Validate end > start for dates
         if self.start_date is not None and self.end_date is not None:
@@ -110,7 +146,9 @@ class MLFlowConfig(BaseModel):
         default=None, description="Artifact storage location (e.g., s3://bucket/path)"
     )
     tags: dict[str, str] = Field(default_factory=dict, description="Run tags")
-    experiment_tags: dict[str, str] = Field(default_factory=dict, description="Experiment tags")
+    experiment_tags: dict[str, str] = Field(
+        default_factory=dict, description="Experiment tags"
+    )
 
 
 class Config(BaseModel):

@@ -10,6 +10,19 @@ import typer
 from loguru import logger
 
 from simulation.config import load_config
+from simulation.mlflow_utils import (
+    log_config_artifact,
+    log_mcmc_diagnostics,
+    log_model_artifact,
+    log_plots_artifact,
+    log_results_artifact,
+    log_summary_metrics,
+    log_window_result,
+    mlflow_run,
+)
+from simulation.simulator import RollingWindowSimulator
+
+app = typer.Typer(help="Core Deposit Simulation CLI")
 
 
 def _setup_jax_device(device: str, num_chains: int) -> None:
@@ -38,19 +51,6 @@ def _setup_jax_device(device: str, num_chains: int) -> None:
         except RuntimeError:
             logger.warning("GPU requested but not available, falling back to CPU")
             jax.config.update("jax_platform_name", "cpu")
-from simulation.mlflow_utils import (
-    log_config_artifact,
-    log_mcmc_diagnostics,
-    log_model_artifact,
-    log_plots_artifact,
-    log_results_artifact,
-    log_summary_metrics,
-    log_window_result,
-    mlflow_run,
-)
-from simulation.simulator import RollingWindowSimulator
-
-app = typer.Typer(help="Core Deposit Simulation CLI")
 
 
 def setup_logging(verbose: bool = False, log_file: Path | None = None) -> None:
@@ -86,15 +86,38 @@ def setup_logging(verbose: bool = False, log_file: Path | None = None) -> None:
 
 @app.command()
 def run(
-    config_path: Annotated[Path, typer.Argument(help="Path to YAML configuration file")],
-    dry_run: Annotated[bool, typer.Option(help="Print configuration without running")] = False,
+    config_path: Annotated[
+        Path, typer.Argument(help="Path to YAML configuration file")
+    ],
+    dry_run: Annotated[
+        bool, typer.Option(help="Print configuration without running")
+    ] = False,
     no_mlflow: Annotated[bool, typer.Option(help="Disable MLFlow logging")] = False,
-    save_plots: Annotated[bool, typer.Option("--save-plots", help="Save prediction plots to MLFlow")] = False,
-    save_models: Annotated[bool, typer.Option("--save-models", help="Save model artifacts to MLFlow (params + MCMC samples)")] = False,
-    plot_dir: Annotated[Path | None, typer.Option("--plot-dir", help="Save plots to local directory")] = None,
-    jobs: Annotated[int | None, typer.Option("-j", "--jobs", help="Number of parallel workers (overrides config)")] = None,
-    verbose: Annotated[bool, typer.Option("-v", "--verbose", help="Verbose output (DEBUG level)")] = False,
-    log_file: Annotated[Path | None, typer.Option("--log-file", help="Path to log file")] = None,
+    save_plots: Annotated[
+        bool, typer.Option("--save-plots", help="Save prediction plots to MLFlow")
+    ] = False,
+    save_models: Annotated[
+        bool,
+        typer.Option(
+            "--save-models",
+            help="Save model artifacts to MLFlow (params + MCMC samples)",
+        ),
+    ] = False,
+    plot_dir: Annotated[
+        Path | None, typer.Option("--plot-dir", help="Save plots to local directory")
+    ] = None,
+    jobs: Annotated[
+        int | None,
+        typer.Option(
+            "-j", "--jobs", help="Number of parallel workers (overrides config)"
+        ),
+    ] = None,
+    verbose: Annotated[
+        bool, typer.Option("-v", "--verbose", help="Verbose output (DEBUG level)")
+    ] = False,
+    log_file: Annotated[
+        Path | None, typer.Option("--log-file", help="Path to log file")
+    ] = None,
 ) -> None:
     """Run rolling window simulation."""
     setup_logging(verbose=verbose, log_file=log_file)
@@ -128,54 +151,92 @@ def run(
 
     if no_mlflow:
         logger.info("Running without MLFlow")
-        results = []
-        with typer.progressbar(
-            simulator.iter_windows(), length=n_windows, label="Running"
-        ) as progress:
-            for window_id, train_start, train_end, test_end in progress:
-                logger.debug(f"Window {window_id}: train=[{train_start}:{train_end}], test=[{train_end}:{test_end}]")
-                result = simulator.run_window(train_start, train_end, test_end)
-                result.window_id = window_id
-                results.append(result)
-                oos_rmse = result.metrics['oosample_rmse']
-                if np.isnan(oos_rmse):
-                    logger.debug(f"Window {window_id} completed: IS RMSE={result.metrics['insample_rmse']:.4f} (in-sample only)")
-                else:
-                    logger.debug(f"Window {window_id} completed: OOS RMSE={oos_rmse:.4f}")
+        n_jobs = config.simulation.n_jobs
+
+        if n_jobs > 1:
+            # Use parallel execution via simulator.run()
+            logger.info(f"Running {n_windows} windows in parallel (n_jobs={n_jobs})")
+            results = simulator.run()
+        else:
+            # Sequential execution with progress bar
+            results = []
+            with typer.progressbar(
+                simulator.iter_windows(), length=n_windows, label="Running"
+            ) as progress:
+                for window_id, train_start, train_end, test_end in progress:
+                    logger.debug(
+                        f"Window {window_id}: train=[{train_start}:{train_end}], test=[{train_end}:{test_end}]"
+                    )
+                    result = simulator.run_window(train_start, train_end, test_end)
+                    result.window_id = window_id
+                    results.append(result)
+                    oos_rmse = result.metrics["oosample_rmse"]
+                    if np.isnan(oos_rmse):
+                        logger.debug(
+                            f"Window {window_id} completed: IS RMSE={result.metrics['insample_rmse']:.4f} (in-sample only)"
+                        )
+                    else:
+                        logger.debug(
+                            f"Window {window_id} completed: OOS RMSE={oos_rmse:.4f}"
+                        )
 
         _print_summary(results)
 
         # Save plots locally if requested
         if plot_dir:
-            _save_plots_local(results, plot_dir, is_mcmc=config.model.estimator == "mcmc")
+            _save_plots_local(
+                results, plot_dir, is_mcmc=config.model.estimator == "mcmc"
+            )
     else:
         logger.info("Running with MLFlow logging")
+        n_jobs = config.simulation.n_jobs
+
         with mlflow_run(config) as active_run:
             logger.info(f"MLFlow run ID: {active_run.info.run_id}")
 
             # Log config as artifact
             log_config_artifact(config, str(config_path))
 
-            results = []
-            with typer.progressbar(
-                simulator.iter_windows(), length=n_windows, label="Running"
-            ) as progress:
-                for window_id, train_start, train_end, test_end in progress:
-                    logger.debug(f"Window {window_id}: train=[{train_start}:{train_end}], test=[{train_end}:{test_end}]")
+            if n_jobs > 1:
+                # Use parallel execution via simulator.run()
+                logger.info(
+                    f"Running {n_windows} windows in parallel (n_jobs={n_jobs})"
+                )
+                results = simulator.run()
 
-                    result = simulator.run_window(train_start, train_end, test_end)
-                    result.window_id = window_id
-                    results.append(result)
-
-                    # Log to MLFlow
+                # Log results to MLFlow after completion
+                for result in results:
                     log_window_result(result)
                     if save_models:
                         log_model_artifact(result, config.model.estimator)
-                    oos_rmse = result.metrics['oosample_rmse']
-                    if np.isnan(oos_rmse):
-                        logger.debug(f"Window {window_id} completed: IS RMSE={result.metrics['insample_rmse']:.4f} (in-sample only)")
-                    else:
-                        logger.debug(f"Window {window_id} completed: OOS RMSE={oos_rmse:.4f}")
+            else:
+                # Sequential execution with progress bar
+                results = []
+                with typer.progressbar(
+                    simulator.iter_windows(), length=n_windows, label="Running"
+                ) as progress:
+                    for window_id, train_start, train_end, test_end in progress:
+                        logger.debug(
+                            f"Window {window_id}: train=[{train_start}:{train_end}], test=[{train_end}:{test_end}]"
+                        )
+
+                        result = simulator.run_window(train_start, train_end, test_end)
+                        result.window_id = window_id
+                        results.append(result)
+
+                        # Log to MLFlow
+                        log_window_result(result)
+                        if save_models:
+                            log_model_artifact(result, config.model.estimator)
+                        oos_rmse = result.metrics["oosample_rmse"]
+                        if np.isnan(oos_rmse):
+                            logger.debug(
+                                f"Window {window_id} completed: IS RMSE={result.metrics['insample_rmse']:.4f} (in-sample only)"
+                            )
+                        else:
+                            logger.debug(
+                                f"Window {window_id} completed: OOS RMSE={oos_rmse:.4f}"
+                            )
 
             # Log summary
             log_summary_metrics(results)
@@ -183,7 +244,14 @@ def run(
 
             # Detect if this is MCMC with credible intervals
             is_mcmc = config.model.estimator == "mcmc"
-            has_mcmc_ci = is_mcmc and results and (results[0].insample_ci is not None or results[0].oosample_ci is not None)
+            has_mcmc_ci = (
+                is_mcmc
+                and results
+                and (
+                    results[0].insample_ci is not None
+                    or results[0].oosample_ci is not None
+                )
+            )
 
             # Save plots to MLFlow if requested
             if save_plots:
@@ -219,7 +287,9 @@ def _save_plots_local(results: list, plot_dir: Path, is_mcmc: bool = False) -> N
     plot_dir.mkdir(parents=True, exist_ok=True)
 
     # Check if we have credible intervals
-    has_ci = results and (results[0].insample_ci is not None or results[0].oosample_ci is not None)
+    has_ci = results and (
+        results[0].insample_ci is not None or results[0].oosample_ci is not None
+    )
 
     # Save individual window plots
     windows_dir = plot_dir / "windows"
@@ -255,10 +325,14 @@ def _save_plots_local(results: list, plot_dir: Path, is_mcmc: bool = False) -> N
                 continue
             try:
                 idata = az.from_numpyro(result.result.diagnostics["mcmc"])
-                plot_mcmc_diagnostics(idata, mcmc_dir / f"window_{result.window_id:03d}")
+                plot_mcmc_diagnostics(
+                    idata, mcmc_dir / f"window_{result.window_id:03d}"
+                )
                 logger.info(f"Saved MCMC diagnostics for window {result.window_id}")
             except Exception as e:
-                logger.warning(f"Failed to save MCMC diagnostics for window {result.window_id}: {e}")
+                logger.warning(
+                    f"Failed to save MCMC diagnostics for window {result.window_id}: {e}"
+                )
 
 
 def _print_summary(results: list) -> None:
@@ -279,22 +353,34 @@ def _print_summary(results: list) -> None:
         # In-sample metrics
         typer.echo(f"IS RMSE: mean={np.mean(is_rmse):.4f}, std={np.std(is_rmse):.4f}")
         if not any(np.isnan(is_mape)):
-            typer.echo(f"IS MAPE: mean={np.mean(is_mape):.2f}%, std={np.std(is_mape):.2f}%")
+            typer.echo(
+                f"IS MAPE: mean={np.mean(is_mape):.2f}%, std={np.std(is_mape):.2f}%"
+            )
 
         # Out-of-sample metrics (only if available)
         if not all(np.isnan(oos_rmse)):
-            typer.echo(f"OOS RMSE: mean={np.nanmean(oos_rmse):.4f}, std={np.nanstd(oos_rmse):.4f}")
+            typer.echo(
+                f"OOS RMSE: mean={np.nanmean(oos_rmse):.4f}, std={np.nanstd(oos_rmse):.4f}"
+            )
             if not all(np.isnan(oos_mape)):
-                typer.echo(f"OOS MAPE: mean={np.nanmean(oos_mape):.2f}%, std={np.nanstd(oos_mape):.2f}%")
-            logger.info(f"OOS RMSE: mean={np.nanmean(oos_rmse):.4f}, std={np.nanstd(oos_rmse):.4f}")
+                typer.echo(
+                    f"OOS MAPE: mean={np.nanmean(oos_mape):.2f}%, std={np.nanstd(oos_mape):.2f}%"
+                )
+            logger.info(
+                f"OOS RMSE: mean={np.nanmean(oos_rmse):.4f}, std={np.nanstd(oos_rmse):.4f}"
+            )
         else:
             typer.echo("OOS metrics: N/A (in-sample only)")
-            logger.info(f"IS RMSE: mean={np.mean(is_rmse):.4f}, std={np.std(is_rmse):.4f}")
+            logger.info(
+                f"IS RMSE: mean={np.mean(is_rmse):.4f}, std={np.std(is_rmse):.4f}"
+            )
 
 
 @app.command()
 def validate(
-    config_path: Annotated[Path, typer.Argument(help="Path to YAML configuration file")],
+    config_path: Annotated[
+        Path, typer.Argument(help="Path to YAML configuration file")
+    ],
 ) -> None:
     """Validate configuration file."""
     setup_logging(verbose=False)

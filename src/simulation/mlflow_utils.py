@@ -40,12 +40,16 @@ def setup_mlflow(config: MLFlowConfig) -> str:
         )
     else:
         experiment_id = experiment.experiment_id
-        logger.debug(f"Using existing experiment: {config.experiment_name} (ID: {experiment_id})")
+        logger.debug(
+            f"Using existing experiment: {config.experiment_name} (ID: {experiment_id})"
+        )
 
         # Update experiment tags if provided
         if config.experiment_tags:
             for key, value in config.experiment_tags.items():
-                mlflow.tracking.MlflowClient().set_experiment_tag(experiment_id, key, value)
+                mlflow.tracking.MlflowClient().set_experiment_tag(
+                    experiment_id, key, value
+                )
 
     mlflow.set_experiment(experiment_id=experiment_id)
     return experiment_id
@@ -136,7 +140,12 @@ def log_config_artifact(config: Config, config_path: str | None = None) -> None:
         # Save config as YAML
         yaml_path = Path(tmpdir) / "config.yaml"
         with open(yaml_path, "w") as f:
-            yaml.dump(config.model_dump(mode="json"), f, default_flow_style=False, sort_keys=False)
+            yaml.dump(
+                config.model_dump(mode="json"),
+                f,
+                default_flow_style=False,
+                sort_keys=False,
+            )
         mlflow.log_artifact(str(yaml_path), artifact_path="config")
 
         # Copy original config file if provided
@@ -226,7 +235,9 @@ def log_window_result(result: WindowResult, prefix: str = "") -> None:
     _log_estimation_params(result.result, step, prefix)
 
 
-def _log_estimation_params(result: EstimationResult, step: int, prefix: str = "") -> None:
+def _log_estimation_params(
+    result: EstimationResult, step: int, prefix: str = ""
+) -> None:
     """Log estimated parameters from EstimationResult."""
     p = f"{prefix}_" if prefix else ""
 
@@ -235,7 +246,9 @@ def _log_estimation_params(result: EstimationResult, step: int, prefix: str = ""
             val = result.params[param_name]
             # Handle MCMC (array) vs NLS (scalar)
             if hasattr(val, "mean"):
-                mlflow.log_metric(f"{p}param_{param_name}", float(val.mean()), step=step)
+                mlflow.log_metric(
+                    f"{p}param_{param_name}", float(val.mean()), step=step
+                )
             else:
                 mlflow.log_metric(f"{p}param_{param_name}", float(val), step=step)
 
@@ -317,10 +330,14 @@ def log_plots_artifact(results: list[WindowResult], has_mcmc_ci: bool = False) -
             plt.close(fig)
             mlflow.log_artifact(str(combined_path))
         except Exception as e:
-            warnings.warn(f"Failed to log combined plot: {e}", UserWarning, stacklevel=2)
+            warnings.warn(
+                f"Failed to log combined plot: {e}", UserWarning, stacklevel=2
+            )
 
 
-def log_results_artifact(results: list[WindowResult], filename: str = "results.json") -> None:
+def log_results_artifact(
+    results: list[WindowResult], filename: str = "results.json"
+) -> None:
     """Log results as JSON artifact.
 
     Args:
@@ -341,9 +358,15 @@ def log_results_artifact(results: list[WindowResult], filename: str = "results.j
             "test_start": r.test_start,  # Same as train_end
             "test_end": r.test_end,
             # Date-based bounds (if available)
-            "train_start_date": r.train_start_date.isoformat() if r.train_start_date else None,
-            "train_end_date": r.train_end_date.isoformat() if r.train_end_date else None,
-            "test_start_date": r.test_start_date.isoformat() if r.test_start_date else None,
+            "train_start_date": r.train_start_date.isoformat()
+            if r.train_start_date
+            else None,
+            "train_end_date": r.train_end_date.isoformat()
+            if r.train_end_date
+            else None,
+            "test_start_date": r.test_start_date.isoformat()
+            if r.test_start_date
+            else None,
             "test_end_date": r.test_end_date.isoformat() if r.test_end_date else None,
             # Metrics and params
             "metrics": r.metrics,
@@ -449,7 +472,11 @@ def log_mcmc_diagnostics(results: list[WindowResult]) -> None:
             try:
                 idata = az.from_numpyro(result.result.diagnostics["mcmc"])
             except Exception as e:
-                warnings.warn(f"Failed to convert MCMC result to ArviZ: {e}", UserWarning, stacklevel=2)
+                warnings.warn(
+                    f"Failed to convert MCMC result to ArviZ: {e}",
+                    UserWarning,
+                    stacklevel=2,
+                )
                 continue
 
             window_dir = tmppath / f"mcmc_window_{result.window_id:03d}"
@@ -461,7 +488,9 @@ def log_mcmc_diagnostics(results: list[WindowResult]) -> None:
                 fig.savefig(window_dir / "trace.png", dpi=150, bbox_inches="tight")
                 plt.close(fig)
             except Exception as e:
-                warnings.warn(f"Failed to generate trace plot: {e}", UserWarning, stacklevel=2)
+                warnings.warn(
+                    f"Failed to generate trace plot: {e}", UserWarning, stacklevel=2
+                )
 
             # Posterior plot
             try:
@@ -469,7 +498,9 @@ def log_mcmc_diagnostics(results: list[WindowResult]) -> None:
                 fig.savefig(window_dir / "posterior.png", dpi=150, bbox_inches="tight")
                 plt.close(fig)
             except Exception as e:
-                warnings.warn(f"Failed to generate posterior plot: {e}", UserWarning, stacklevel=2)
+                warnings.warn(
+                    f"Failed to generate posterior plot: {e}", UserWarning, stacklevel=2
+                )
 
             # Pair plot
             try:
@@ -477,7 +508,9 @@ def log_mcmc_diagnostics(results: list[WindowResult]) -> None:
                 fig.savefig(window_dir / "pair.png", dpi=150, bbox_inches="tight")
                 plt.close(fig)
             except Exception as e:
-                warnings.warn(f"Failed to generate pair plot: {e}", UserWarning, stacklevel=2)
+                warnings.warn(
+                    f"Failed to generate pair plot: {e}", UserWarning, stacklevel=2
+                )
 
             # Forest plot
             try:
@@ -485,10 +518,16 @@ def log_mcmc_diagnostics(results: list[WindowResult]) -> None:
                 fig.savefig(window_dir / "forest.png", dpi=150, bbox_inches="tight")
                 plt.close(fig)
             except Exception as e:
-                warnings.warn(f"Failed to generate forest plot: {e}", UserWarning, stacklevel=2)
+                warnings.warn(
+                    f"Failed to generate forest plot: {e}", UserWarning, stacklevel=2
+                )
 
             # Log all plots for this window
             try:
-                mlflow.log_artifacts(str(window_dir), artifact_path=f"mcmc/window_{result.window_id:03d}")
+                mlflow.log_artifacts(
+                    str(window_dir), artifact_path=f"mcmc/window_{result.window_id:03d}"
+                )
             except Exception as e:
-                warnings.warn(f"Failed to log MCMC artifacts: {e}", UserWarning, stacklevel=2)
+                warnings.warn(
+                    f"Failed to log MCMC artifacts: {e}", UserWarning, stacklevel=2
+                )
