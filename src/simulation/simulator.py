@@ -768,7 +768,7 @@ def _run_window_worker(
     simulator._inflow = inflow
     simulator._z = z
     if dates is not None:
-        simulator._dates = pd.DatetimeIndex(dates)
+        simulator._dates = pd.to_datetime(pd.Series(dates))
 
     # Run single window
     result = simulator.run_window(train_start, train_end, test_end)
