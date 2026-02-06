@@ -9,4 +9,12 @@ wheels/
 # Virtual environments
 .venv
 
+# Claude
 .claude
+
+# Config files (except example)
+configs/*
+!configs/example.yaml
+
+# Data files
+data/
