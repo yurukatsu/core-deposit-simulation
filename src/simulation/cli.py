@@ -324,7 +324,12 @@ def _save_plots_local(results: list, plot_dir: Path, is_mcmc: bool = False) -> N
             if result.result is None or "mcmc" not in result.result.diagnostics:
                 continue
             try:
-                idata = az.from_numpyro(result.result.diagnostics["mcmc"])
+                mcmc_data = result.result.diagnostics["mcmc"]
+                # Handle both raw MCMC object and already-converted InferenceData
+                if isinstance(mcmc_data, az.InferenceData):
+                    idata = mcmc_data
+                else:
+                    idata = az.from_numpyro(mcmc_data)
                 plot_mcmc_diagnostics(
                     idata, mcmc_dir / f"window_{result.window_id:03d}"
                 )

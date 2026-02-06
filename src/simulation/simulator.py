@@ -93,7 +93,12 @@ def _check_mcmc_convergence(
         return True, 1.0
 
     try:
-        idata = az.from_numpyro(result.diagnostics["mcmc"])
+        mcmc_data = result.diagnostics["mcmc"]
+        # Handle both raw MCMC object and already-converted InferenceData
+        if isinstance(mcmc_data, az.InferenceData):
+            idata = mcmc_data
+        else:
+            idata = az.from_numpyro(mcmc_data)
         rhat = az.rhat(idata)
 
         # Check main parameters
@@ -773,5 +778,18 @@ def _run_window_worker(
     # Run single window
     result = simulator.run_window(train_start, train_end, test_end)
     result.window_id = window_id
+
+    # Convert MCMC diagnostics to ArviZ InferenceData for pickling
+    # The raw MCMC object contains local function references that can't be pickled
+    if (
+        result.result is not None
+        and "mcmc" in result.result.diagnostics
+        and result.result.diagnostics["mcmc"] is not None
+    ):
+        import arviz as az
+
+        mcmc_obj = result.result.diagnostics["mcmc"]
+        # Convert to ArviZ InferenceData which is picklable
+        result.result.diagnostics["mcmc"] = az.from_numpyro(mcmc_obj)
 
     return result

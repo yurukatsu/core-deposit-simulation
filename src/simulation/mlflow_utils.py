@@ -210,8 +210,12 @@ def log_model_artifact(result: WindowResult, estimator_type: str) -> None:
             try:
                 import arviz as az
 
-                mcmc = estimation_result.diagnostics["mcmc"]
-                idata = az.from_numpyro(mcmc)
+                mcmc_data = estimation_result.diagnostics["mcmc"]
+                # Handle both raw MCMC object and already-converted InferenceData
+                if isinstance(mcmc_data, az.InferenceData):
+                    idata = mcmc_data
+                else:
+                    idata = az.from_numpyro(mcmc_data)
 
                 netcdf_path = tmpdir_path / "inference_data.nc"
                 idata.to_netcdf(str(netcdf_path))
@@ -411,7 +415,12 @@ def _extract_params(result: EstimationResult) -> dict[str, Any]:
         try:
             import arviz as az
 
-            idata = az.from_numpyro(result.diagnostics["mcmc"])
+            mcmc_data = result.diagnostics["mcmc"]
+            # Handle both raw MCMC object and already-converted InferenceData
+            if isinstance(mcmc_data, az.InferenceData):
+                idata = mcmc_data
+            else:
+                idata = az.from_numpyro(mcmc_data)
             mcmc_summary = az.summary(idata)
         except Exception:
             pass
@@ -477,7 +486,12 @@ def log_mcmc_diagnostics(results: list[WindowResult]) -> None:
 
             # Convert to ArviZ InferenceData
             try:
-                idata = az.from_numpyro(result.result.diagnostics["mcmc"])
+                mcmc_data = result.result.diagnostics["mcmc"]
+                # Handle both raw MCMC object and already-converted InferenceData
+                if isinstance(mcmc_data, az.InferenceData):
+                    idata = mcmc_data
+                else:
+                    idata = az.from_numpyro(mcmc_data)
             except Exception as e:
                 warnings.warn(
                     f"Failed to convert MCMC result to ArviZ: {e}",
