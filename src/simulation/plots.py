@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.figure import Figure
-from numpy.typing import NDArray
 
 from simulation.simulator import WindowResult
 
@@ -316,7 +315,7 @@ def plot_mcmc_pair(
     import arviz as az
 
     var_names = ["lambda", "gamma", "w1", "h"]
-    fig = plt.figure(figsize=figsize)
+    plt.figure(figsize=figsize)
     az.plot_pair(idata, var_names=var_names, kind="kde", marginals=True)
     plt.tight_layout()
     return plt.gcf()

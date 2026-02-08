@@ -306,7 +306,6 @@ def log_plots_artifact(results: list[WindowResult], has_mcmc_ci: bool = False) -
         plot_all_windows,
         plot_combined_timeseries,
         plot_combined_timeseries_with_ci,
-        plot_window_predictions,
         plot_window_predictions_with_ci,
     )
 

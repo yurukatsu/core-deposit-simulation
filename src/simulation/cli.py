@@ -402,6 +402,159 @@ def validate(
         raise typer.Exit(1)
 
 
+@app.command("list-experiments")
+def list_experiments_cmd(
+    tracking_uri: Annotated[
+        str, typer.Option("--uri", help="MLFlow tracking URI")
+    ] = "http://localhost:5000",
+) -> None:
+    """List MLFlow experiments."""
+    from simulation.mlflow_loader import list_experiments
+
+    experiments = list_experiments(tracking_uri)
+
+    typer.echo(f"Found {len(experiments)} experiments:\n")
+    for exp in experiments:
+        typer.echo(f"  [{exp['experiment_id']}] {exp['name']}")
+        if exp.get("tags"):
+            for key, value in exp["tags"].items():
+                if not key.startswith("mlflow."):
+                    typer.echo(f"    {key}: {value}")
+
+
+@app.command("list-runs")
+def list_runs_cmd(
+    experiment_name: Annotated[str, typer.Argument(help="Experiment name")],
+    tracking_uri: Annotated[
+        str, typer.Option("--uri", help="MLFlow tracking URI")
+    ] = "http://localhost:5000",
+    max_results: Annotated[
+        int, typer.Option("--max", help="Maximum number of runs")
+    ] = 20,
+) -> None:
+    """List runs in an MLFlow experiment."""
+    from datetime import datetime
+
+    from simulation.mlflow_loader import list_runs
+
+    runs = list_runs(
+        experiment_name=experiment_name,
+        tracking_uri=tracking_uri,
+        max_results=max_results,
+    )
+
+    typer.echo(f"Found {len(runs)} runs in '{experiment_name}':\n")
+    for run in runs:
+        start_time = datetime.fromtimestamp(run["start_time"] / 1000).strftime(
+            "%Y-%m-%d %H:%M"
+        )
+        run_name = run.get("run_name") or "(unnamed)"
+        status = run["status"]
+
+        typer.echo(f"  [{run['run_id'][:8]}] {run_name} ({status}) - {start_time}")
+
+        # Show key metrics
+        metrics = run.get("metrics", {})
+        if "mean_oosample_rmse" in metrics:
+            typer.echo(f"    OOS RMSE: {metrics['mean_oosample_rmse']:.4f}")
+        elif "mean_insample_rmse" in metrics:
+            typer.echo(f"    IS RMSE: {metrics['mean_insample_rmse']:.4f}")
+
+
+@app.command("load-run")
+def load_run_cmd(
+    run_id: Annotated[str, typer.Argument(help="MLFlow run ID")],
+    tracking_uri: Annotated[
+        str, typer.Option("--uri", help="MLFlow tracking URI")
+    ] = "http://localhost:5000",
+    output_dir: Annotated[
+        Path | None,
+        typer.Option("--output", "-o", help="Output directory for artifacts"),
+    ] = None,
+    verbose: Annotated[
+        bool, typer.Option("-v", "--verbose", help="Verbose output")
+    ] = False,
+) -> None:
+    """Load and display a run from MLFlow."""
+    setup_logging(verbose=verbose)
+
+    from simulation.mlflow_loader import load_run
+
+    typer.echo(f"Loading run: {run_id}")
+
+    loaded = load_run(
+        run_id=run_id,
+        tracking_uri=tracking_uri,
+        load_inference_data=True,
+        artifact_download_path=output_dir,
+    )
+
+    typer.echo(f"\nRun: {loaded.run_name or run_id}")
+    typer.echo(f"Status: {loaded.status}")
+    typer.echo(f"Experiment ID: {loaded.experiment_id}")
+
+    # Show config summary
+    if loaded.config:
+        typer.echo("\nConfiguration:")
+        if "model" in loaded.config:
+            typer.echo(f"  Estimator: {loaded.config['model'].get('estimator', 'N/A')}")
+        if "simulation" in loaded.config:
+            sim = loaded.config["simulation"]
+            typer.echo(
+                f"  Windows: t_train={sim.get('t_train')}, "
+                f"t_test={sim.get('t_test')}, t_gap={sim.get('t_gap')}"
+            )
+
+    # Show summary metrics
+    typer.echo("\nSummary Metrics:")
+    for key in ["mean_insample_rmse", "mean_oosample_rmse", "n_windows"]:
+        if key in loaded.metrics:
+            typer.echo(f"  {key}: {loaded.metrics[key]:.4f}")
+
+    # Show windows with InferenceData
+    n_with_idata = sum(1 for w in loaded.windows if w.inference_data is not None)
+    typer.echo(
+        f"\nWindows: {len(loaded.windows)} total, {n_with_idata} with InferenceData"
+    )
+
+    if output_dir:
+        typer.echo(f"\nArtifacts saved to: {output_dir}")
+
+
+@app.command("show-posterior")
+def show_posterior_cmd(
+    run_id: Annotated[str, typer.Argument(help="MLFlow run ID")],
+    window_id: Annotated[int, typer.Argument(help="Window ID")],
+    tracking_uri: Annotated[
+        str, typer.Option("--uri", help="MLFlow tracking URI")
+    ] = "http://localhost:5000",
+    params: Annotated[
+        str | None,
+        typer.Option("--params", "-p", help="Comma-separated parameter names"),
+    ] = None,
+) -> None:
+    """Show posterior summary for a specific window."""
+    from simulation.mlflow_loader import compute_posterior_summary, load_inference_data
+
+    typer.echo(f"Loading InferenceData for run {run_id}, window {window_id}...")
+
+    idata = load_inference_data(
+        run_id=run_id,
+        window_id=window_id,
+        tracking_uri=tracking_uri,
+    )
+
+    var_names = params.split(",") if params else None
+    summary = compute_posterior_summary(idata, var_names=var_names)
+
+    typer.echo(f"\nPosterior Summary (Window {window_id}):\n")
+    for var, stats in summary.items():
+        typer.echo(f"  {var}:")
+        typer.echo(f"    mean: {stats['mean']:.6f}, std: {stats['std']:.6f}")
+        typer.echo(f"    median: {stats['median']:.6f}")
+        typer.echo(f"    95% CI: [{stats['q5']:.6f}, {stats['q95']:.6f}]")
+
+
 def main() -> None:
     """Main entry point."""
     app()
